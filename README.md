@@ -1,0 +1,1 @@
+# ajjes-stryktipsmodell

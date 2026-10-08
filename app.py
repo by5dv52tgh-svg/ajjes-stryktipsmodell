@@ -6,6 +6,25 @@ import streamlit as st
 st.set_page_config(page_title="Ajjes Stryktipsmodell", page_icon="⚽", layout="wide")
 SIGNS = ["1", "X", "2"]
 
+# --- GLOBAL LAGDATABAS FÖR EXAKT MATCHNING ---
+ALL_TEAMS = [
+    "Manchester United", "Manchester City", "Sheffield United", "Sheffield Wednesday",
+    "Aston Villa", "Newcastle United", "West Ham United", "Brighton & Hove Albion", 
+    "Brighton", "Tottenham Hotspur", "Tottenham", "Nottingham Forest", "Nottingham",
+    "Crystal Palace", "Wolverhampton Wanderers", "Wolverhampton", "Wolves",
+    "West Bromwich Albion", "West Brom", "Blackburn Rovers", "Blackburn",
+    "Cardiff City", "Cardiff", "Stoke City", "Stoke", "Derby County", "Derby",
+    "Preston North End", "Preston", "Queens Park Rangers", "QPR",
+    "Sheffield Utd", "Sheffield Wed", "Leeds United", "Leeds",
+    "Arsenal", "Chelsea", "Liverpool", "Bournemouth", "Brentford", "Sunderland",
+    "Ipswich Town", "Ipswich", "Fulham", "Bolton Wanderers", "Bolton", "Wrexham",
+    "Middlesbrough", "Millwall", "Watford", "Burnley", "Huddersfield Town", "Huddersfield",
+    "Lincoln City", "Lincoln", "Everton", "Leicester City", "Leicester", "Southampton",
+    "Luton Town", "Luton", "Portsmouth", "Coventry City", "Coventry", "Hull City", "Hull",
+    "Norwich City", "Norwich", "Plymouth Argyle", "Plymouth", "Bristol City", "Swansea City", "Swansea",
+    "Oxford United", "Oxford"
+]
+
 # --- BERÄKNINGSMOTOR & VERKTYG ---
 
 def norm3(v):
@@ -28,9 +47,44 @@ def get_crowd_probabilities(s1, sx, s2):
     except:
         return np.ones(3) / 3
 
-# --- SMART SPECIALTOLK FÖR TEXTRADER ---
-def parse_ajjes_flexible_file(uploaded_file):
-    """Läser raderna och pusslar ihop långa lagnamn helt perfekt"""
+def clean_and_split_teams(combined_text):
+    """Lagar trasiga ord och separerar hemma/borta via lagdatabasen"""
+    # Laga kända fil- och text-delningsfel från rådata
+    t = combined_text.replace("brentf ord", "Brentford").replace("Brentf ord", "Brentford")
+    t = t.replace("brighto n", "Brighton").replace("Brighto n", "Brighton")
+    t = t.replace("bournemout h", "Bournemouth").replace("Bournemout h", "Bournemouth")
+    t = t.replace("bournmout h", "Bournemouth").replace("Bournmout h", "Bournemouth")
+    t = t.replace("shef field", "Sheffield").replace("Shef field", "Sheffield")
+    t = t.replace("wolv erhampton", "Wolverhampton").replace("Wolv erhampton", "Wolverhampton")
+    
+    t_clean = t.strip()
+    sorted_teams = sorted(ALL_TEAMS, key=len, reverse=True)
+    
+    home_team = "Lag A"
+    away_team = "Lag B"
+    
+    # Hitta hemmalaget först baserat på databasen
+    for team in sorted_teams:
+        if t_clean.lower().startswith(team.lower()):
+            home_team = team
+            remaining = t_clean[len(team):].strip()
+            
+            # Städa bort eventuella skiljetecken i mitten
+            if remaining.lower().startswith("vs "): remaining = remaining[3:].strip()
+            if remaining.lower().startswith("- "): remaining = remaining[2:].strip()
+            
+            away_team = remaining
+            # Snygga till bortalagets namn om det finns i databasen
+            for t2 in sorted_teams:
+                if remaining.lower() == t2.lower() or remaining.lower().startswith(t2.lower()):
+                    away_team = t2
+                    break
+            return home_team, away_team
+            
+    return home_team, away_team
+
+def parse_ajjes_robust_file(uploaded_file):
+    """Läser filen rad för rad och extraherar all data helt felfritt"""
     try:
         lines = uploaded_file.getvalue().decode("utf-8").splitlines()
         final_data = []
@@ -40,51 +94,41 @@ def parse_ajjes_flexible_file(uploaded_file):
             if not line.strip():
                 continue
             
-            # Tvätta och splitta raden
+            # Gör om alla semikolon till mellanslag och splitta till bitar
             cleaned_line = line.replace(";", " ")
             parts = [p.strip() for p in cleaned_line.split() if p.strip()]
             
             if len(parts) < 2 or "home" in parts or "Match" in parts:
                 continue
                 
-            # Ta bort ett eventuellt matchnummer i början (t.ex. "1", "2") om det finns
-            if parts[0].isdigit() and int(parts[0]) == match_idx:
-                parts = parts[1:]
-                
-            # Hitta alla bitar som är siffror (odds/streck)
+            # Separera siffror och ord
             numbers = []
             words = []
             for p in parts:
-                # Kolla om det är ett tal (t.ex. 1.45 eller 45)
-                if p.replace('.', '', 1).isdigit() or p.isdigit():
-                    numbers.append(float(p))
+                p_clean = p.replace("%", "")
+                if p_clean.replace('.', '', 1).isdigit() or p_clean.isdigit():
+                    numbers.append(float(p_clean))
                 else:
                     words.append(p)
             
-            # Om vi inte fick nog med ord, sätt standardnamn
-            if len(words) < 2:
-                home_team = f"Match {match_idx} - Hemmalag"
-                away_team = "Bortalag"
-            else:
-                # Dela upp orden i två halvor för hemma- och bortalag
-                mid = len(words) // 2
-                home_team = " ".join(words[:mid])
-                away_team = " ".join(words[mid:])
+            # Om första siffran är matchnumret (1-13), plocka bort den så den inte stör oddsen
+            if numbers and int(numbers[0]) == match_idx:
+                numbers = numbers[1:]
+                
+            # Sätt ihop alla ord till en enda textsträng för att köra specialsepareringen
+            combined_words = " ".join(words)
+            home_team, away_team = clean_and_split_teams(combined_words)
             
-            # Hämta odds från sifferlistan (eller sätt standard)
+            # Hämta odds och streck baserat på sifferlistan
             o1 = numbers[0] if len(numbers) > 0 else 2.10
             ox = numbers[1] if len(numbers) > 1 else 3.30
             o2 = numbers[2] if len(numbers) > 2 else 3.10
-            
-            # Hämta streck
             s1 = numbers[3] if len(numbers) > 3 else 45.0
             sx = numbers[4] if len(numbers) > 4 else 30.0
             s2 = numbers[5] if len(numbers) > 5 else 25.0
             
             final_data.append({
-                "Match": match_idx,
-                "Hemmalag": home_team,
-                "Bortalag": away_team,
+                "Match": match_idx, "Hemmalag": home_team, "Bortalag": away_team,
                 "Odds 1": o1, "Odds X": ox, "Odds 2": o2,
                 "Streck 1": s1, "Streck X": sx, "Streck 2": s2
             })
@@ -97,10 +141,9 @@ def parse_ajjes_flexible_file(uploaded_file):
                 "Match": len(final_data)+1, "Hemmalag": "Väntar på data...", "Bortalag": "",
                 "Odds 1": 2.5, "Odds X": 3.2, "Odds 2": 2.8, "Streck 1": 33.3, "Streck X": 33.3, "Streck 2": 33.3
             })
-            
         return pd.DataFrame(final_data)
     except Exception as e:
-        return pd.DataFrame([{"Match": i+1, "Hemmalag": f"Fel vid inläsning: {e}", "Bortalag": "", "Odds 1": 2.5, "Odds X": 3.2, "Odds 2": 2.8, "Streck 1": 33.3, "Streck X": 33.3, "Streck 2": 33.3} for i in range(13)])
+        return pd.DataFrame([{"Match": i+1, "Hemmalag": f"Fel: {e}", "Bortalag": "", "Odds 1": 2.5, "Odds X": 3.2, "Odds 2": 2.8, "Streck 1": 33.3, "Streck X": 33.3, "Streck 2": 33.3} for i in range(13)])
 
 # --- SYSTEMBYGGARE ---
 def advanced_system_builder(probs, crowd_probs, budget):
@@ -163,7 +206,7 @@ with t1:
     if not up:
         st.info("👋 Välkommen! Ladda upp din matchfil (.csv) ovan för att starta veckans analys.")
     else:
-        df = parse_ajjes_flexible_file(up)
+        df = parse_ajjes_robust_file(up)
         
         st.markdown("### Förhandsgranskning / Redigera data")
         edited_df = st.data_editor(df, use_container_width=True, hide_index=True)
@@ -174,53 +217,7 @@ with t1:
             for idx, r in edited_df.iterrows():
                 h_name = r["Hemmalag"]
                 a_name = r["Bortalag"]
-                
                 o1, ox, o2 = r["Odds 1"], r["Odds X"], r["Odds 2"]
                 s1, sx, s2 = r["Streck 1"], r["Streck X"], r["Streck 2"]
                 
                 mp = get_implicit_probabilities(o1, ox, o2)
-                cp = get_crowd_probabilities(s1, sx, s2)
-                p = norm3(mp * w["odds"] + cp * w["crowd"])
-                
-                probs.append(p)
-                crowd_probs.append(cp)
-                
-                v_streck = p - cp
-                clean_matches.append({"home": h_name, "away": a_name})
-                
-                out_table.append({
-                    "Match": f"{idx+1}. {h_name} – {a_name}",
-                    "Ajje 1": f"{round(p*100,1)}%", "Ajje X": f"{round(p*100,1)}%", "Ajje 2": f"{round(p*100,1)}%",
-                    "Folk 1": f"{round(cp*100)}%", "Folk X": f"{round(cp*100)}%", "Folk 2": f"{round(cp*100)}%",
-                    "Värde Streck": f"{round(v_streck*100,1)} / {round(v_streck*100,1)} / {round(v_streck*100,1)}"
-                })
-            st.session_state.update(probs=probs, crowd_probs=crowd_probs, clean_matches=clean_matches, result_df=pd.DataFrame(out_table))
-
-    if "result_df" in st.session_state and up:
-        st.markdown("---")
-        st.subheader("2. Analysöversikt")
-        st.dataframe(st.session_state.result_df, use_container_width=True, hide_index=True)
-        
-        sel, rows = advanced_system_builder(st.session_state.probs, st.session_state.crowd_probs, budget)
-        st.markdown("---")
-        st.subheader("3. Optimerat Systembygge")
-        a, b, c = st.columns(3)
-        a.metric("Målbudget", f"{budget} kr"); b.metric("Beräknade rader", f"{rows} st"); c.metric("Slutlig kostnad", f"{rows} kr")
-        st.info(f"**Systemrad:** {' – '.join(''.join(SIGNS[s] for s in x) for x in sel)}")
-        
-        detail = []
-        for i, s in enumerate(sel):
-            cm = st.session_state.clean_matches[i]
-            signs_text = "".join(SIGNS[x] for x in s)
-            detail.append({
-                "Match": f"{i+1}. {cm['home']} – {cm['away']}", "Systemtecken": signs_text,
-                "Typ": "Spik" if len(s)==1 else ("Halvgardering" if len(s)==2 else "Helgardering"),
-                "Modellens Motivering": generate_decision_text(st.session_state.probs[i], st.session_state.crowd_probs[i], signs_text)
-            })
-        st.dataframe(pd.DataFrame(detail), use_container_width=True, hide_index=True)
-
-with t2:
-    st.subheader("Historiskt backtest")
-
-with t3:
-    st.subheader("Instruktioner")

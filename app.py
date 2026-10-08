@@ -1,118 +1,171 @@
+import math, os
 import numpy as np
 import pandas as pd
+import requests
 import streamlit as st
 
-st.set_page_config(page_title="Ajjes Stryktips Spelmotor", page_icon="⚽", layout="wide")
-SIGNS = ["1", "X", "2"]
+st.set_page_config(page_title='Ajjes Stryktipsmodell', page_icon='⚽', layout='wide')
+SIGNS=['1','X','2']
 
-def norm3(v):
-    a = np.maximum(np.asarray(v, dtype=float), 1e-9)
-    return a / a.sum()
+def norm(x):
+    a=np.asarray(x,dtype=float)
+    if np.any(~np.isfinite(a)) or np.any(a<0) or a.sum()<=0: raise ValueError('Saknade eller ogiltiga värden.')
+    return a/a.sum()
 
-st.title("⚽ Ajjes Spelmotor & Live AI v3.0")
-st.caption("Outstanding Stryktipsplattform: Automatiskt Live-API, Skaderapporter och xG-statistik.")
+def odds_probs(odds):
+    o=np.asarray(odds,dtype=float)
+    if np.any(~np.isfinite(o)) or np.any(o<=1): raise ValueError('Odds måste vara decimalodds större än 1.')
+    return norm(1/o)
 
-# --- DYNAMISK BUDGETVÄLJARE PÅ HUVUDSKÄRMEN ---
-st.markdown("### 🛠️ Välj din Systembudget")
-budget = st.selectbox("Justera radkostnad (kr) — Systemet och AI-analysen uppdateras direkt:", [64, 128, 256, 512, 1024, 2048, 4096], index=0)
+def safe(v):
+    try: return float(str(v).replace('%','').replace(',','.'))
+    except: return float('nan')
 
-w_odds, w_crowd = 60, 40
+def template():
+    return pd.DataFrame([{'Match':i,'Hemmalag':'','Bortalag':'','O1':np.nan,'OX':np.nan,'O2':np.nan,'S1':np.nan,'SX':np.nan,'S2':np.nan,'xG_H':np.nan,'xG_B':np.nan,'Form_H':'','Form_B':'','Skador_och_lagnyheter':'','Motivation':'','Källor':''} for i in range(1,14)])
 
-st.markdown("---")
-st.subheader("1. Datainhämtning via Live-API (Skador & xG)")
-st.write("Klicka nedan för att suga in dagsaktuell, verifierad fotbollsfakta, formkurvor och officiell statistik.")
+def get_json(url):
+    r=requests.get(url,headers={'Accept':'application/json','User-Agent':'AjjesStryktipsmodell/1.0'},timeout=20)
+    r.raise_for_status(); return r.json()
 
-if st.button("🔄 ANSLUT TILL LIVE-API & SKRAPA OMGÅNGEN", type="primary", use_container_width=True) or "live_api_data" in st.session_state:
-    if "live_api_data" not in st.session_state:
-        st.session_state.live_api_data = pd.DataFrame([
-            {"Match": 1, "Hemmalag": "Manchester United", "Bortalag": "Tottenham", "O1": 2.15, "OX": 3.50, "O2": 3.10, "S1": 52, "SX": 25, "S2": 23, "xG_H": 1.92, "xG_B": 1.45, "Form": "ManU (V-O-V-F-V) / Tot (F-V-O-F-F)", "Injuries": "Tottenham saknar förstamålvakt (knäskada). ManU full elva.", "Chans_Mod": 0.05},
-            {"Match": 2, "Hemmalag": "Chelsea", "Bortalag": "Bournemouth", "O1": 1.55, "OX": 4.40, "O2": 5.25, "S1": 68, "SX": 18, "S2": 14, "xG_H": 2.30, "xG_B": 1.10, "Form": "Che (V-V-V-O-V) / Bou (F-F-O-V-F)", "Injuries": "Chelsea startar med ordinarie anfallskedja. Bournemouth saknar nyckelback.", "Chans_Mod": 0.0},
-            {"Match": 3, "Hemmalag": "Aston Villa", "Bortalag": "Wolves", "O1": 1.65, "OX": 4.00, "O2": 4.80, "S1": 62, "SX": 22, "S2": 16, "xG_H": 2.10, "xG_B": 1.25, "Form": "AV (V-F-V-V-O) / Wol (F-O-F-F-V)", "Injuries": "Wolves bästa mittfältare avstängd. Aston Villa urstarka hemma.", "Chans_Mod": 0.02},
-            {"Match": 4, "Hemmalag": "Sunderland", "Bortalag": "Leeds", "O1": 2.80, "OX": 3.25, "O2": 2.45, "S1": 31, "SX": 29, "S2": 40, "xG_H": 1.15, "xG_B": 1.88, "Form": "Sun (F-F-O-V-F) / Lee (V-V-V-O-V)", "Injuries": "Sunderland saknar sin bästa målskytt (12 mål) pga brutet ben! Sänker chansen.", "Chans_Mod": -0.07},
-            {"Match": 5, "Hemmalag": "Ipswich", "Bortalag": "Fulham", "O1": 2.60, "OX": 3.30, "O2": 2.65, "S1": 36, "SX": 30, "S2": 34, "xG_H": 1.40, "xG_B": 1.42, "Form": "Ips (O-V-F-F-O) / Ful (V-F-O-V-O)", "Injuries": "Båda lagen har fullständigt bekräftade startelvor utan sena skador.", "Chans_Mod": 0.0},
-            {"Match": 6, "Hemmalag": "Blackburn", "Bortalag": "QPR", "O1": 1.95, "OX": 3.40, "O2": 3.80, "S1": 48, "SX": 28, "S2": 24, "xG_H": 1.75, "xG_B": 1.10, "Form": "Bla (V-V-O-F-V) / QPR (F-O-F-F-O)", "Injuries": "QPR dras med tunga avstängningar på mittfältet. Blackburn toppform.", "Chans_Mod": 0.04},
-            {"Match": 7, "Hemmalag": "Bolton", "Bortalag": "Wrexham", "O1": 2.10, "OX": 3.30, "O2": 3.40, "S1": 44, "SX": 30, "S2": 26, "xG_H": 1.60, "xG_B": 1.35, "Form": "Bol (V-O-V-F-F) / Wre (O-V-F-V-O)", "Injuries": "Wrexham roterar truppen pga kommande cupmatch. Bolton motiverat.", "Chans_Mod": 0.03},
-            {"Match": 8, "Hemmalag": "Derby", "Bortalag": "Norwich", "O1": 2.90, "OX": 3.25, "O2": 2.40, "S1": 30, "SX": 28, "S2": 42, "xG_H": 1.20, "xG_B": 1.65, "Form": "Der (F-F-O-V-F) / Nor (V-V-F-O-V)", "Injuries": "Norwich har full form och anfallaren (8 mål) spelklar efter skada.", "Chans_Mod": 0.0},
-            {"Match": 9, "Hemmalag": "Middlesbrough", "Bortalag": "Millwall", "O1": 1.85, "OX": 3.50, "O2": 4.20, "S1": 55, "SX": 26, "S2": 19, "xG_H": 1.80, "xG_B": 0.95, "Form": "Mid (V-V-F-O-V) / Mil (F-O-F-F-V)", "Injuries": "Millwall saknar lagkaptenen (avstängd). Middlesbrough urstarka hemma.", "Chans_Mod": 0.02},
-            {"Match": 10, "Hemmalag": "Preston", "Bortalag": "Watford", "O1": 2.45, "OX": 3.20, "O2": 2.85, "S1": 38, "SX": 31, "S2": 31, "xG_H": 1.35, "xG_B": 1.50, "Form": "Pre (O-F-V-F-O) / Wat (V-O-F-V-F)", "Injuries": "Preston har två ordinarie försvarare på skadelistan. Osäkert.", "Chans_Mod": -0.03},
-            {"Match": 11, "Hemmalag": "Sheffield Utd", "Bortalag": "Luton", "O1": 2.00, "OX": 3.40, "O2": 3.60, "S1": 50, "SX": 28, "S2": 22, "xG_H": 1.70, "xG_B": 1.20, "Form": "SU (V-V-O-F-V) / Lut (F-O-V-F-F)", "Injuries": "Sheffield Utd spelar för direktuppflyttning, maximal motivation.", "Chans_Mod": 0.02},
-            {"Match": 12, "Hemmalag": "Portsmouth", "Bortalag": "Sheffield Wed", "O1": 2.75, "OX": 3.20, "O2": 2.55, "S1": 32, "SX": 31, "S2": 37, "xG_H": 1.30, "xG_B": 1.45, "Form": "Por (F-O-F-F-O) / SW (V-F-O-V-V)", "Injuries": "Portsmouth har tunga skador i försvaret, släppt in 9 mål sista 5.", "Chans_Mod": -0.04},
-            {"Match": 13, "Hemmalag": "Coventry", "Bortalag": "Hull", "O1": 1.90, "OX": 3.50, "O2": 3.90, "S1": 51, "SX": 27, "S2": 22, "xG_H": 1.65, "xG_B": 1.15, "Form": "Cov (V-O-V-F-V) / Hul (F-F-O-V-F)", "Injuries": "Hull saknar ordinarie yttermittfältare. Coventry full trupp.", "Chans_Mod": 0.01}
-        ])
-        st.success("🎯 Databasanslutning upprättad: Äkta skaderapporter, formkurvor och xG-statistik inladdat för samtliga 13 matcher!")
+def dig(obj):
+    """Find arrays named events/matches/fixtures/games; schema still must be verified."""
+    out=[]
+    if isinstance(obj,dict):
+        for k,v in obj.items():
+            if str(k).lower() in ('events','matches','fixtures','games') and isinstance(v,list) and v and all(isinstance(z,dict) for z in v): out.append((obj,v))
+            out.extend(dig(v))
+    elif isinstance(obj,list):
+        for v in obj: out.extend(dig(v))
+    return out
 
-    f_df = st.session_state.live_api_data
-    st.dataframe(f_df[["Match", "Hemmalag", "Bortalag", "Form", "Injuries"]], use_container_width=True, hide_index=True)
-    
-    probs, crowd_probs, out_table = [], [], []
-    for idx, r in f_df.iterrows():
-        mp = norm3([1/r["O1"], 1/r["OX"], 1/r["O2"]])
-        cp = norm3([r["S1"], r["SX"], r["S2"]])
-        
-        adj_mp = mp.copy()
-        adj_mp += r["Chans_Mod"]
-        market_p = norm3(adj_mp)
-        
-        p = norm3(market_p * (w_odds/100) + cp * (w_crowd/100))
-        probs.append(p)
-        crowd_probs.append(cp)
-        v = p - cp
-        
-        # FIXEN: Plockar ut enskilda siffer-index så att textsträngarna formateras korrekt!
-        p_pct = np.round(p * 100, 1)
-        v_pct = np.round(v * 100, 1)
-        
-        out_table.append({
-            "Match": f"{r['Match']}. {r['Hemmalag']} – {r['Bortalag']}",
-            "Sann Vinstchans (Live-API)": f"{p_pct[0]}% / {p_pct[1]}% / {p_pct[2]}%",
-            "Svenska Folkets Streck": f"{int(r['S1'])}% / {int(r['SX'])}% / {int(r['S2'])}%",
-            "Matematiskt Spelvärde": f"{'+' if v_pct[0]>0 else ''}{v_pct[0]}% / {'+' if v_pct[1]>0 else ''}{v_pct[1]}% / {'+' if v_pct[2]>0 else ''}{v_pct[2]}%"
-        })
-        
-    st.markdown("### 2. Matematisk Analysöversikt (Spelvärde)")
-    st.dataframe(pd.DataFrame(out_table), use_container_width=True, hide_index=True)
-    
-    # --- KNAPSACK SYSTEMOPTIMERING ---
-    sel = [[int(np.argmax(p))] for p in probs]
-    rows = 1
-    candidates = []
-    for i, (p, cp) in enumerate(zip(probs, crowd_probs)):
-        for s in range(3):
-            if s != sel[i]: candidates.append((p[s] + max(0, p[s] - cp[s]) * 2.0, i, s))
-    candidates.sort(key=lambda x: x, reverse=True)
-    for _, i, s in candidates:
-        if s in sel[i]: continue
-        current_options = len(sel[i])
-        proposed_rows = (rows // current_options) * (current_options + 1)
-        if proposed_rows <= budget:
-            rows = proposed_rows
-            sel[i].append(s)
-            
-    st.markdown("### 3. Optimerat Systembygge utifrån din Budget")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Vald budget-gräns", f"{budget} kr")
-    col2.metric("Beräknade rader", f"{rows} st")
-    col3.metric("Faktisk systemkostnad", f"{rows} kr")
-    
-    # --- ÄKTA FAKTABASERADE AI-MOTIVERINGAR ---
-    detail = []
-    for i, s in enumerate(sel):
-        r_d = f_df.iloc[i]
-        signs_text = "".join(SIGNS[x] for x in sorted(s))
-        xg_text = f"xG-statistik ({r_d['xG_H']} mot {r_d['xG_B']})"
-        form_text = f"formkurva: {r_d['Form'].split(' / ')[0 if int(np.argmax(probs[i]))==0 else 1]}"
-        injury_fakta = r_d['Injuries']
-        
-        if len(s) == 3:
-            ai_msg = f"Helgarderas ({signs_text}). {injury_fakta} Det ger matchen en extremt hög osäkerhetsfaktor. Vi utnyttjar att folket snöat in sig på historiken och plockar med kupongens bästa rensartecken."
-        elif len(s) == 2:
-            ai_msg = f"Halvgardering {signs_text}. {xg_text} ger hemmalaget fördelen, men {injury_fakta} gör att vi säkrar upp systemet med {signs_text} helt enligt modellens riskhantering."
+def get(d,names,default=None):
+    low={str(k).lower():k for k in d}
+    for n in names:
+        if n.lower() in low: return d[low[n.lower()]]
+    return default
+
+def parse_team(v):
+    if isinstance(v,dict): return get(v,['name','displayName','teamName','shortName'],'')
+    return v if isinstance(v,str) else ''
+
+def parse_coupon(url):
+    data=get_json(url)
+    for container,events in dig(data):
+        rows=[]
+        for i,e in enumerate(events,1):
+            h=parse_team(get(e,['homeTeam','home_team','home','homeName','homeTeamName']))
+            a=parse_team(get(e,['awayTeam','away_team','away','awayName','awayTeamName']))
+            if not h or not a:
+                ps=get(e,['participants','competitors','teams'])
+                if isinstance(ps,list) and len(ps)>=2: h,a=parse_team(ps[0]),parse_team(ps[1])
+            if not h or not a: rows=[]; break
+            def stake(sign):
+                direct=get(e,[f'{sign}Streck',f'{sign}Percent',f'stake{sign}',f'percentage{sign}'])
+                if direct is not None: return safe(direct)
+                outcomes=get(e,['outcomes','bettingOutcomes','pools'],[])
+                if isinstance(outcomes,list):
+                    aliases={'1':['1','HOME','H'],'X':['X','DRAW','D'],'2':['2','AWAY','A']}[sign]
+                    for o in outcomes:
+                        if isinstance(o,dict) and str(get(o,['type','name','sign','outcome'],'')).upper() in aliases:
+                            return safe(get(o,['percentage','percent','stake','share']))
+                return np.nan
+            rows.append({'Match':i,'Hemmalag':h,'Bortalag':a,'O1':np.nan,'OX':np.nan,'O2':np.nan,'S1':stake('1'),'SX':stake('X'),'S2':stake('2')})
+        if len(rows)==13: return pd.DataFrame(rows), {'omgång':get(container,['drawNumber','roundNumber','productNumber','number','id'],'Ej angivet'),'datum':get(container,['date','drawDate','startDate','closeTime','stopTime'],'Ej angivet')}
+    raise ValueError('API-svaret hämtades men hittade inte 13 matcher i ett känt format. Anpassa parse_coupon() till den dokumenterade endpointen. Ingen kupong hittades på.')
+
+def optimize(probs,crowds,budget,value_weight=0.0005):
+    # Dynamic programming: optimize joint coverage probability, row product <= budget.
+    subsets=[(0,),(1,),(2,),(0,1),(0,2),(1,2),(0,1,2)]
+    states={1:(0.0,[])}
+    for i,p in enumerate(probs):
+        nxt={}
+        for rows,(score,chosen) in states.items():
+            for ss in subsets:
+                nr=rows*len(ss)
+                if nr>budget: continue
+                covered=max(float(sum(p[j] for j in ss)),1e-12)
+                bonus=0.0
+                c=crowds[i]
+                if c is not None: bonus=value_weight*sum(max(0.0,float(p[j]-c[j])) for j in ss)
+                ns=score+math.log(covered)+bonus
+                if nr not in nxt or ns>nxt[nr][0]: nxt[nr]=(ns,chosen+[list(ss)])
+        states=nxt
+    if not states: raise ValueError('Ingen kombination ryms inom budgeten.')
+    rows,(_,chosen)=max(states.items(),key=lambda kv:kv[1][0])
+    coverage=float(np.prod([sum(p[j] for j in ss) for p,ss in zip(probs,chosen)]))
+    return chosen,rows,coverage
+
+st.title('⚽ Ajjes Stryktipsmodell')
+st.caption('Ingen påhittad kupong eller låtsad live-data. Verifiera API-källan innan automatisk hämtning används.')
+with st.sidebar:
+    budget=st.selectbox('Systembudget (kr)',[64,128,256,512,1024,2048,4096])
+    api_url=st.text_input('Verifierad Svenska Spel API-endpoint',value=os.getenv('SVENSKASPEL_COUPON_API',''),placeholder='API-URL från dokumenterad källa')
+
+if 'df' not in st.session_state: st.session_state.df=template()
+if 'meta' not in st.session_state: st.session_state.meta={}
+st.header('1. Aktuell kupong')
+c1,c2=st.columns([1,2])
+with c1:
+    if st.button('Hämta aktuell kupong',type='primary',use_container_width=True):
+        if not api_url.strip(): st.error('Ange först en verifierad API-endpoint. Ingen officiell endpoint har hårdkodats eftersom den måste kontrolleras.')
         else:
-            ai_msg = f"Spikas! {injury_fakta} kombinerat med lagets starka {form_text} och solklara {xg_text} gör detta till en av omgångens absolut säkraste spikar utifrån din budget."
-            
-        detail.append({"Match": f"{i+1}. {r_d['Hemmalag']} – {r_d['Bortalag']}", "AI:ns Tecken": signs_text, "Beslutstyp": "Spik" if len(s)==1 else ("Halvgardering" if len(s)==2 else "Helgardering"), "Äkta Verifierad AI-Motivering (Live-API)": ai_msg})
-        
-    st.dataframe(pd.DataFrame(detail), use_container_width=True, hide_index=True)
-    st.success(f"🎉 Ajjes Spelmotor klar! Systemet är matematiskt optimerat för exakt {rows} rader utifrån din budget på {budget} kr.")
-else:
-    st.info("👋 Välkommen Ajje! Välj din budget högst upp och klicka på den blå knappen för att starta den helautomatisKA Live-API analysen!")
+            try:
+                d,m=parse_coupon(api_url.strip())
+                for col in ['xG_H','xG_B','Form_H','Form_B','Skador_och_lagnyheter','Motivation','Källor']:
+                    if col not in d: d[col]=np.nan if col in ['xG_H','xG_B'] else ''
+                st.session_state.df=d; st.session_state.meta=m; st.success('Kupong hämtad från angiven endpoint.')
+            except Exception as e: st.error(f'Kunde inte verifiera kupongen: {e}')
+with c2:
+    uploaded=st.file_uploader('Eller importera CSV (exakt 13 matcher)',type=['csv'])
+    if uploaded:
+        try:
+            d=pd.read_csv(uploaded)
+            if len(d)!=13 or not {'Hemmalag','Bortalag'}.issubset(d.columns): st.error('CSV måste ha exakt 13 rader och Hemmalag/Bortalag-kolumner.')
+            else:
+                for col in template().columns:
+                    if col not in d: d[col]=np.nan if col in ['O1','OX','O2','S1','SX','S2','xG_H','xG_B'] else ''
+                st.session_state.df=d; st.success('CSV importerad.')
+        except Exception as e: st.error(f'CSV-fel: {e}')
+if st.session_state.meta: st.caption(f"Omgång: {st.session_state.meta.get('omgång')} · Datum/spelstopp: {st.session_state.meta.get('datum')}")
+st.info('Fyll/importera odds och streck om API:t inte levererar dem. Tomma uppgifter ersätts inte med gissningar.')
+edited=st.data_editor(st.session_state.df,num_rows='fixed',use_container_width=True,key='coupon_edit')
+st.session_state.df=edited
+
+st.header('2. Odds, streck och matematiskt spelvärde')
+rows=[]; market_probs=[]; crowd_probs=[]
+for i,r in edited.iterrows():
+    try: mp=odds_probs([safe(r.get('O1')),safe(r.get('OX')),safe(r.get('O2'))])
+    except: mp=None
+    ss=np.array([safe(r.get('S1')),safe(r.get('SX')),safe(r.get('S2'))])
+    try: cp=norm(ss) if np.all(np.isfinite(ss)) else None
+    except: cp=None
+    market_probs.append(mp); crowd_probs.append(cp)
+    name=f"{i+1}. {r.get('Hemmalag','')} – {r.get('Bortalag','')}"
+    if mp is None:
+        rows.append({'Match':name,'Oddsbaserad P(1/X/2)':'Saknas','Streck (1/X/2)':'Saknas','Skillnad p.e.':'Kan ej räknas','Värdeindex':'Kan ej räknas'})
+    elif cp is None:
+        rows.append({'Match':name,'Oddsbaserad P(1/X/2)':' / '.join(f'{x*100:.1f}%' for x in mp),'Streck (1/X/2)':'Saknas','Skillnad p.e.':'Kan ej räknas','Värdeindex':'Kan ej räknas'})
+    else:
+        rows.append({'Match':name,'Oddsbaserad P(1/X/2)':' / '.join(f'{x*100:.1f}%' for x in mp),'Streck (1/X/2)':' / '.join(f'{x*100:.1f}%' for x in cp),'Skillnad p.e.':' / '.join(f'{(mp[j]-cp[j])*100:+.1f}' for j in range(3)),'Värdeindex':' / '.join(f'{mp[j]/max(cp[j],1e-6):.2f}' for j in range(3))})
+st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
+st.caption('Värdeindex = oddsbaserad sannolikhet / streckandel. Detta är ett värdesamband, inte en garanti för vinst.')
+
+st.header('3. Ajjes AI-analys och system')
+st.warning('Riktig aktuell xG-, skade-, startelva- och motivationsanalys kräver verifierade datakällor och en ansluten AI-tjänst. Denna kod hittar inte på sådan data; tills dess används odds som transparent baslinje.')
+if st.button('Analysera och optimera system',type='primary',use_container_width=True):
+    missing=[i+1 for i,p in enumerate(market_probs) if p is None]
+    if missing: st.error('Giltiga odds saknas för match(er): '+', '.join(map(str,missing))+'. Lägg in odds innan analysen körs.')
+    else:
+        chosen,nrows,coverage=optimize(market_probs,crowd_probs,budget)
+        output=[]
+        for i,ss in enumerate(chosen):
+            r=edited.iloc[i]; p=market_probs[i]; cp=crowd_probs[i]
+            signs=''.join(SIGNS[j] for j in ss)
+            output.append({'Match':f"{i+1}. {r.get('Hemmalag','')} – {r.get('Bortalag','')}",'P(1/X/2)':' / '.join(f'{v*100:.1f}%' for v in p),'Ajjes tecken':signs,'Typ':'Spik' if len(ss)==1 else 'Halvgardering' if len(ss)==2 else 'Helgardering','Värdeindex 1/X/2':' / '.join(f'{p[j]/max(cp[j],1e-6):.2f}' for j in range(3)) if cp is not None else 'Streck saknas','Motivering':'Oddsbaserad baslinje. Ingen verifierad AI-analys av aktuell form/xG/skador är ansluten.'})
+        st.subheader('Föreslaget system')
+        st.dataframe(pd.DataFrame(output),use_container_width=True,hide_index=True)
+        st.metric('Antal rader',nrows); st.metric('Kostnad',f'{nrows} kr'); st.metric('Beräknad chans till 13 rätt',f'{coverage*100:.6f}%')
+        st.code(' – '.join(''.join(SIGNS[j] for j in ss) for ss in chosen))
+        st.download_button('Ladda ner systemet som CSV',pd.DataFrame(output).to_csv(index=False).encode('utf-8-sig'),'ajjes_system.csv','text/csv')
+        st.caption('Beräknad täckningschans förutsätter korrekta sannolikheter och oberoende matchutfall. Ingen modell kan garantera 13 rätt.')

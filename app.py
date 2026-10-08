@@ -103,7 +103,7 @@ def advanced_system_builder(probs, crowd_probs, market_probs, budget):
     candidates = []
     for i, (p, cp, mp) in enumerate(zip(probs, crowd_probs, market_probs)):
         for s in range(3):
-            if s != sel[i][0]: # Om tecknet inte redan är valt som spik
+            if s != sel[i]: # Om tecknet inte redan är valt som spik
                 # Beräkna hur attraktivt detta tecken är att gardera med
                 # Högre sannolikhet + positivt värde mot folket = Högre prioritet
                 value_streck = p[s] - cp[s]
@@ -111,7 +111,7 @@ def advanced_system_builder(probs, crowd_probs, market_probs, budget):
                 candidates.append((priority_score, i, s))
                 
     # Sortera kandidaterna så att de bästa garderingarna hamnar först
-    candidates.sort(key=lambda x: x[0], reverse=True)
+    candidates.sort(key=lambda x: x, reverse=True)
     
     # Köp garderingar så länge budgeten tillåter
     for _, i, s in candidates:

@@ -17,7 +17,6 @@ def get_clean_float(val):
 
 def parse_strict_numbers_file(uploaded_file):
     try:
-        # Läser din rena och uppdaterade tabell med semikolon-stöd
         df = pd.read_csv(uploaded_file, sep=None, engine='python', header=None)
         final_data = []
         match_idx = 1
@@ -28,7 +27,7 @@ def parse_strict_numbers_file(uploaded_file):
             
             h_name = str(row.iloc[1]).strip()
             a_name = str(row.iloc[2]).strip()
-            if h_name == "" or h_name.lower() == "nan": continue
+            if h_name == "" or h_name.lower() == "nan" or a_name == "" or a_name.lower() == "nan": continue
             
             s1 = get_clean_float(row.iloc[3])
             sx = get_clean_float(row.iloc[4])
@@ -37,6 +36,8 @@ def parse_strict_numbers_file(uploaded_file):
             o1 = get_clean_float(row.iloc[6])
             ox = get_clean_float(row.iloc[7])
             o2 = get_clean_float(row.iloc[8])
+            
+            if o1 == 0 or ox == 0 or o2 == 0: continue
             
             final_data.append({
                 "Match": match_idx, "Hemmalag": h_name, "Bortalag": a_name,
@@ -84,7 +85,7 @@ st.caption("Strikt matematisk systemoptimering utifrån dina exakta siffror och 
 
 with st.sidebar:
     st.header("Modellkonfiguration")
-    budget = st.selectbox("Välj din Systembudget (kr / rader)", [64, 128, 256, 512, 1024], index=2)
+    budget = st.selectbox("Välj din Systembudget (kr / rader)", [16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024], index=8)
 
 t1, t2, t3 = st.tabs(["📊 Veckans Spelmotor", "⏳ Historik & Lärande", "📑 Modellens Regler"])
 
@@ -94,17 +95,8 @@ with t1:
         st.info("👋 Välkommen Ajje! Ladda upp din färdigställda CSV-fil här ovanför.")
     else:
         df = parse_strict_numbers_file(up)
-        if not df.empty:
+        if not df.empty and len(df) == 13:
             st.markdown("### 1. Verifierad data från din CSV-fil")
-            
-            # Säkra sifferformatet och visa tabellen helt felfritt
-            df["Odds 1"] = pd.to_numeric(df["Odds 1"])
-            df["Odds X"] = pd.to_numeric(df["Odds X"])
-            df["Odds 2"] = pd.to_numeric(df["Odds 2"])
-            df["Streck 1"] = pd.to_numeric(df["Streck 1"])
-            df["Streck X"] = pd.to_numeric(df["Streck X"])
-            df["Streck 2"] = pd.to_numeric(df["Streck 2"])
-            
             st.dataframe(df, use_container_width=True, hide_index=True)
             
             probs, crowd_probs, out_table = [], [], []
@@ -112,19 +104,18 @@ with t1:
                 o1, ox, o2 = float(r["Odds 1"]), float(r["Odds X"]), float(r["Odds 2"])
                 s1, sx, s2 = float(r["Streck 1"]), float(r["Streck X"]), float(r["Streck 2"])
                 
-                raw_mp = [1/o1, 1/ox, 1/o2] if o1 > 0 else [0.33, 0.33, 0.33]
+                raw_mp = [1/o1, 1/ox, 1/o2]
                 market_p = norm3(raw_mp)
-                crowd_p = norm3([s1, sx, s2]) if s1 > 0 else [0.33, 0.33, 0.33]
+                crowd_p = norm3([s1, sx, s2])
                 
-                # Ajjes samlade sannolikhetsmodell väger samman marknaden och värdet
                 p = norm3(market_p * 0.60 + crowd_p * 0.40)
                 probs.append(p)
                 crowd_probs.append(crowd_p)
                 
-                v1, vX, v2 = p-crowd_p, p-crowd_p, p-crowd_p
+                v1, vX, v2 = p[0]-crowd_p[0], p[1]-crowd_p[1], p[2]-crowd_p[2]
                 out_table.append({
                     "Match": f"{r['Match']}. {r['Hemmalag']} – {r['Bortalag']}",
-                    "Sann vinstchans (1/X/2)": f"{round(p*100)}% / {round(p*100)}% / {round(p*100)}%",
+                    "Ajjes Sannolikhet (1/X/2)": f"{round(p[0]*100)}% / {round(p[1]*100)}% / {round(p[2]*100)}%",
                     "Dina Streck (1/X/2)": f"{round(s1)}% / {round(sx)}% / {round(s2)}%",
                     "Matematiskt Spelvärde": f"{'+' if v1>0 else ''}{round(v1*100,1)}% / {'+' if vX>0 else ''}{round(vX*100,1)}% / {'+' if v2>0 else ''}{round(v2*100,1)}%"
                 })
@@ -133,7 +124,6 @@ with t1:
             st.subheader("2. Matematisk Analysöversikt (Spelvärde)")
             st.dataframe(pd.DataFrame(out_table), use_container_width=True, hide_index=True)
             
-            # Beräkna systemet rent matematiskt baserat på EV och budget
             sel, rows = advanced_system_builder(probs, crowd_probs, budget)
             
             st.markdown("---")
@@ -154,6 +144,8 @@ with t1:
                     "Matematisk Motivering (Varför vi spelar detta)": generate_decision_text(probs[i], crowd_probs[i], signs_text, row_data['Hemmalag'], row_data['Bortalag'])
                 })
             st.dataframe(pd.DataFrame(detail), use_container_width=True, hide_index=True)
+        else:
+            st.error("Filen lästes in men hittade inte exakt 13 fullständiga matcher. Kontrollera att alla matcher har odds och streck fyllda i din Numbers-fil.")
 
 with t2: st.subheader("Walk-forward Backtesting")
 with t3: st.subheader("Modellens Regler & Kravspecifikation")

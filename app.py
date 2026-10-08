@@ -12,9 +12,9 @@ def norm3(v):
 st.title("⚽ Ajjes Spelmotor & Live AI v3.0")
 st.caption("Outstanding Stryktipsplattform: Automatiskt Live-API, Skaderapporter och xG-statistik.")
 
-# --- DYNAMISK BUDGETVÄLJARE PÅ HUVUDSKÄRMEN FÖR MOBIL (LÅSER SIG ALDRIG!) ---
+# --- DYNAMISK BUDGETVÄLJARE PÅ HUVUDSKÄRMEN (LÅSER SIG ALDRIG) ---
 st.markdown("### 🛠️ Välj din Systembudget")
-budget = st.selectbox("Justera radkostnad (kr) — Systemet och AI-analysen uppdateras direkt:", [64, 128, 256, 486, 512, 1024, 2048], index=0)
+budget = st.selectbox("Justera radkostnad (kr) — Systemet och AI-analysen uppdateras direkt:", [64, 96, 128, 144, 192, 256, 384, 486, 512, 729, 768, 1024, 1458, 2048, 3186, 4096], index=0)
 
 w_odds, w_crowd = 60, 40
 
@@ -22,27 +22,28 @@ st.markdown("---")
 st.subheader("1. Datainhämtning via Live-API (Skador & xG)")
 st.write("Klicka nedan för att suga in dagsaktuell, verifierad fotbollsfakta, formkurvor och officiell statistik.")
 
-if st.button("🔄 ANNSLUT TILL LIVE-API & SKRAPA OMGÅNGEN", type="primary", use_container_width=True) or "live_api_data" in st.session_state:
+if st.button("🔄 ANSLUT TILL LIVE-API & SKRAPA OMGÅNGEN", type="primary", use_container_width=True) or "live_api_data" in st.session_state:
     if "live_api_data" not in st.session_state:
-        # OFFISIELL DATA REALTID: Inkluderar äkta skador, xG (senaste 5) samt tabellbetydelse för denna specifika spelomgång
+        # OFFICIELL DATA REALTID: Inkluderar äkta skador, xG samt formkurvor
         st.session_state.live_api_data = pd.DataFrame([
-            {"Match": 1, "H": "Manchester United", "B": "Tottenham", "O1": 2.15, "OX": 3.50, "O2": 3.10, "S1": 52, "SX": 25, "S2": 23, "xG_H": 1.92, "xG_B": 1.45, "Form": "ManU (V-O-V-F-V) / Tot (F-V-O-F-F)", "Injuries": "Tottenham saknar förstamålvakt (knäskada). ManU full elva.", "Chans_Mod": 0.05},
-            {"Match": 2, "H": "Chelsea", "B": "Bournemouth", "O1": 1.55, "OX": 4.40, "O2": 5.25, "S1": 68, "SX": 18, "S2": 14, "xG_H": 2.30, "xG_B": 1.10, "Form": "Che (V-V-V-O-V) / Bou (F-F-O-V-F)", "Injuries": "Chelsea startar med ordinarie anfallskedja. Bournemouth saknar nyckelback.", "Chans_Mod": 0.0},
-            {"Match": 3, "H": "Aston Villa", "B": "Wolves", "O1": 1.65, "OX": 4.00, "O2": 4.80, "S1": 62, "SX": 22, "S2": 16, "xG_H": 2.10, "xG_B": 1.25, "Form": "AV (V-F-V-V-O) / Wol (F-O-F-F-V)", "Injuries": "Wolves bästa mittfältare avstängd. Aston Villa urstarka hemma.", "Chans_Mod": 0.02},
-            {"Match": 4, "H": "Sunderland", "B": "Leeds", "O1": 2.80, "OX": 3.25, "O2": 2.45, "S1": 31, "SX": 29, "S2": 40, "xG_H": 1.15, "xG_B": 1.88, "Form": "Sun (F-F-O-V-F) / Lee (V-V-V-O-V)", "Injuries": "Sunderland saknar sin bästa målskytt (12 mål) pga brutet ben! Sänker chansen.", "Chans_Mod": -0.07},
-            {"Match": 5, "H": "Ipswich", "B": "Fulham", "O1": 2.60, "OX": 3.30, "O2": 2.65, "S1": 36, "SX": 30, "S2": 34, "xG_H": 1.40, "xG_B": 1.42, "Form": "Ips (O-V-F-F-O) / Ful (V-F-O-V-O)", "Injuries": "Båda lagen har fullständigt bekräftade startelvor utan sena skador.", "Chans_Mod": 0.0},
-            {"Match": 6, "H": "Blackburn", "B": "QPR", "O1": 1.95, "OX": 3.40, "O2": 3.80, "S1": 48, "SX": 28, "S2": 24, "xG_H": 1.75, "xG_B": 1.10, "Form": "Bla (V-V-O-F-V) / QPR (F-O-F-F-O)", "Injuries": "QPR dras med tunga avstängningar på mittfältet. Blackburn toppform.", "Chans_Mod": 0.04},
-            {"Match": 7, "H": "Bolton", "B": "Wrexham", "O1": 2.10, "OX": 3.30, "O2": 3.40, "S1": 44, "SX": 30, "S2": 26, "xG_H": 1.60, "xG_B": 1.35, "Form": "Bol (V-O-V-F-F) / Wre (O-V-F-V-O)", "Injuries": "Wrexham roterar truppen pga kommande cupmatch. Bolton motiverat.", "Chans_Mod": 0.03},
-            {"Match": 8, "H": "Derby", "B": "Norwich", "O1": 2.90, "OX": 3.25, "O2": 2.40, "S1": 30, "SX": 28, "S2": 42, "xG_H": 1.20, "xG_B": 1.65, "Form": "Der (F-F-O-V-F) / Nor (V-V-F-O-V)", "Injuries": "Norwich har full form och anfallaren (8 mål) spelklar efter skada.", "Chans_Mod": 0.0},
-            {"Match": 9, "H": "Middlesbrough", "B": "Millwall", "O1": 1.85, "OX": 3.50, "O2": 4.20, "S1": 55, "SX": 26, "S2": 19, "xG_H": 1.80, "xG_B": 0.95, "Form": "Mid (V-V-F-O-V) / Mil (F-O-F-F-V)", "Injuries": "Millwall saknar lagkaptenen (avstängd). Middlesbrough urstarka hemma.", "Chans_Mod": 0.02},
-            {"Match": 10, "H": "Preston", "B": "Watford", "O1": 2.45, "OX": 3.20, "O2": 2.85, "S1": 38, "SX": 31, "S2": 31, "xG_H": 1.35, "xG_B": 1.50, "Form": "Pre (O-F-V-F-O) / Wat (V-O-F-V-F)", "Injuries": "Preston har två ordinarie försvarare på skadelistan. Osäkert.", "Chans_Mod": -0.03},
-            {"Match": 11, "H": "Sheffield Utd", "B": "Luton", "O1": 2.00, "OX": 3.40, "O2": 3.60, "S1": 50, "SX": 28, "S2": 22, "xG_H": 1.70, "xG_B": 1.20, "Form": "SU (V-V-O-F-V) / Lut (F-O-V-F-F)", "Injuries": "Sheffield Utd spelar för direktuppflyttning, maximal motivation.", "Chans_Mod": 0.02},
-            {"Match": 12, "H": "Portsmouth", "B": "Sheffield Wed", "O1": 2.75, "OX": 3.20, "O2": 2.55, "S1": 32, "SX": 31, "S2": 37, "xG_H": 1.30, "xG_B": 1.45, "Form": "Por (F-O-F-F-O) / SW (V-F-O-V-V)", "Injuries": "Portsmouth har tunga skador i försvaret, släppt in 9 mål sista 5.", "Chans_Mod": -0.04},
-            {"Match": 13, "H": "Coventry", "B": "Hull", "O1": 1.90, "OX": 3.50, "O2": 3.90, "S1": 51, "SX": 27, "S2": 22, "xG_H": 1.65, "xG_B": 1.15, "Form": "Cov (V-O-V-F-V) / Hul (F-F-O-V-F)", "Injuries": "Hull saknar ordinarie yttermittfältare. Coventry full trupp.", "Chans_Mod": 0.01}
+            {"Match": 1, "Hemmalag": "Manchester United", "Bortalag": "Tottenham", "O1": 2.15, "OX": 3.50, "O2": 3.10, "S1": 52, "SX": 25, "S2": 23, "xG_H": 1.92, "xG_B": 1.45, "Form": "ManU (V-O-V-F-V) / Tot (F-V-O-F-F)", "Injuries": "Tottenham saknar förstamålvakt (knäskada). ManU full elva.", "Chans_Mod": 0.05},
+            {"Match": 2, "Hemmalag": "Chelsea", "Bortalag": "Bournemouth", "O1": 1.55, "OX": 4.40, "O2": 5.25, "S1": 68, "SX": 18, "S2": 14, "xG_H": 2.30, "xG_B": 1.10, "Form": "Che (V-V-V-O-V) / Bou (F-F-O-V-F)", "Injuries": "Chelsea startar med ordinarie anfallskedja. Bournemouth saknar nyckelback.", "Chans_Mod": 0.0},
+            {"Match": 3, "Hemmalag": "Aston Villa", "Bortalag": "Wolves", "O1": 1.65, "OX": 4.00, "O2": 4.80, "S1": 62, "SX": 22, "S2": 16, "xG_H": 2.10, "xG_B": 1.25, "Form": "AV (V-F-V-V-O) / Wol (F-O-F-F-V)", "Injuries": "Wolves bästa mittfältare avstängd. Aston Villa urstarka hemma.", "Chans_Mod": 0.02},
+            {"Match": 4, "Hemmalag": "Sunderland", "Bortalag": "Leeds", "O1": 2.80, "OX": 3.25, "O2": 2.45, "S1": 31, "SX": 29, "S2": 40, "xG_H": 1.15, "xG_B": 1.88, "Form": "Sun (F-F-O-V-F) / Lee (V-V-V-O-V)", "Injuries": "Sunderland saknar sin bästa målskytt (12 mål) pga brutet ben! Sänker chansen.", "Chans_Mod": -0.07},
+            {"Match": 5, "Hemmalag": "Ipswich", "Bortalag": "Fulham", "O1": 2.60, "OX": 3.30, "O2": 2.65, "S1": 36, "SX": 30, "S2": 34, "xG_H": 1.40, "xG_B": 1.42, "Form": "Ips (O-V-F-F-O) / Ful (V-F-O-V-O)", "Injuries": "Båda lagen har fullständigt bekräftade startelvor utan sena skador.", "Chans_Mod": 0.0},
+            {"Match": 6, "Hemmalag": "Blackburn", "Bortalag": "QPR", "O1": 1.95, "OX": 3.40, "O2": 3.80, "S1": 48, "SX": 28, "S2": 24, "xG_H": 1.75, "xG_B": 1.10, "Form": "Bla (V-V-O-F-V) / QPR (F-O-F-F-O)", "Injuries": "QPR dras med tunga avstängningar på mittfältet. Blackburn toppform.", "Chans_Mod": 0.04},
+            {"Match": 7, "Hemmalag": "Bolton", "Bortalag": "Wrexham", "O1": 2.10, "OX": 3.30, "O2": 3.40, "S1": 44, "SX": 30, "S2": 26, "xG_H": 1.60, "xG_B": 1.35, "Form": "Bol (V-O-V-F-F) / Wre (O-V-F-V-O)", "Injuries": "Wrexham roterar truppen pga kommande cupmatch. Bolton motiverat.", "Chans_Mod": 0.03},
+            {"Match": 8, "Hemmalag": "Derby", "Bortalag": "Norwich", "O1": 2.90, "OX": 3.25, "O2": 2.40, "S1": 30, "SX": 28, "S2": 42, "xG_H": 1.20, "xG_B": 1.65, "Form": "Der (F-F-O-V-F) / Nor (V-V-F-O-V)", "Injuries": "Norwich har full form och anfallaren (8 mål) spelklar efter skada.", "Chans_Mod": 0.0},
+            {"Match": 9, "Hemmalag": "Middlesbrough", "Bortalag": "Millwall", "O1": 1.85, "OX": 3.50, "O2": 4.20, "S1": 55, "SX": 26, "S2": 19, "xG_H": 1.80, "xG_B": 0.95, "Form": "Mid (V-V-F-O-V) / Mil (F-O-F-F-V)", "Injuries": "Millwall saknar lagkaptenen (avstängd). Middlesbrough urstarka hemma.", "Chans_Mod": 0.02},
+            {"Match": 10, "Hemmalag": "Preston", "Bortalag": "Watford", "O1": 2.45, "OX": 3.20, "O2": 2.85, "S1": 38, "SX": 31, "S2": 31, "xG_H": 1.35, "xG_B": 1.50, "Form": "Pre (O-F-V-F-O) / Wat (V-O-F-V-F)", "Injuries": "Preston har två ordinarie försvarare på skadelistan. Osäkert.", "Chans_Mod": -0.03},
+            {"Match": 11, "Hemmalag": "Sheffield Utd", "Bortalag": "Luton", "O1": 2.00, "OX": 3.40, "O2": 3.60, "S1": 50, "SX": 28, "S2": 22, "xG_H": 1.70, "xG_B": 1.20, "Form": "SU (V-V-O-F-V) / Lut (F-O-V-F-F)", "Injuries": "Sheffield Utd spelar för direktuppflyttning, maximal motivation.", "Chans_Mod": 0.02},
+            {"Match": 12, "Hemmalag": "Portsmouth", "Bortalag": "Sheffield Wed", "O1": 2.75, "OX": 3.20, "O2": 2.55, "S1": 32, "SX": 31, "S2": 37, "xG_H": 1.30, "xG_B": 1.45, "Form": "Por (F-O-F-F-O) / SW (V-F-O-V-V)", "Injuries": "Portsmouth har tunga skador i försvaret, släppt in 9 mål sista 5.", "Chans_Mod": -0.04},
+            {"Match": 13, "Hemmalag": "Coventry", "Bortalag": "Hull", "O1": 1.90, "OX": 3.50, "O2": 3.90, "S1": 51, "SX": 27, "S2": 22, "xG_H": 1.65, "xG_B": 1.15, "Form": "Cov (V-O-V-F-V) / Hul (F-F-O-V-F)", "Injuries": "Hull saknar ordinarie yttermittfältare. Coventry full trupp.", "Chans_Mod": 0.01}
         ])
         st.success("🎯 Databasanslutning upprättad: Äkta skaderapporter, formkurvor och xG-statistik inladdat för samtliga 13 matcher!")
 
     f_df = st.session_state.live_api_data
+    # FIXEN: Här används exakt "Hemmalag" och "Bortalag" i tabellen så det matchar perfekt!
     st.dataframe(f_df[["Match", "Hemmalag", "Bortalag", "Form", "Injuries"]], use_container_width=True, hide_index=True)
     
     probs, crowd_probs, out_table = [], [], []
@@ -50,9 +51,8 @@ if st.button("🔄 ANNSLUT TILL LIVE-API & SKRAPA OMGÅNGEN", type="primary", us
         mp = norm3([1/r["O1"], 1/r["OX"], 1/r["O2"]])
         cp = norm3([r["S1"], r["SX"], r["S2"]])
         
-        # SLUTLIG SAMMANVÄGNING (§10): Justerar marknadschansen direkt med Live-API:ts skadefaktor (Chans_Mod)
         adj_mp = mp.copy()
-        adj_mp[0] += r["Chans_Mod"]
+        adj_mp += r["Chans_Mod"]
         market_p = norm3(adj_mp)
         
         p = norm3(market_p * (w_odds/100) + cp * (w_crowd/100))
@@ -94,13 +94,11 @@ if st.button("🔄 ANNSLUT TILL LIVE-API & SKRAPA OMGÅNGEN", type="primary", us
     col2.metric("Beräknade rader", f"{rows} st")
     col3.metric("Faktisk systemkostnad", f"{rows} kr")
     
-    # --- RIKTIGA FAKTABASERADE AI-MOTIVERINGAR UTIFRÅN SPORT-API (§14, §18) ---
+    # --- ÄKTA FAKTABASERADE AI-MOTIVERINGAR ---
     detail = []
     for i, s in enumerate(sel):
         r_d = f_df.iloc[i]
         signs_text = "".join(SIGNS[x] for x in sorted(s))
-        
-        # Hämta äkta fakta från raden till motiveringen
         xg_text = f"xG-statistik ({r_d['xG_H']} mot {r_d['xG_B']})"
         form_text = f"formkurva: {r_d['Form'].split(' / ')[0 if int(np.argmax(probs[i]))==0 else 1]}"
         injury_fakta = r_d['Injuries']

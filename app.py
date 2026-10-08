@@ -12,9 +12,9 @@ def norm3(v):
 st.title("⚽ Ajjes Spelmotor & Live AI v3.0")
 st.caption("Outstanding Stryktipsplattform: Automatiskt Live-API, Skaderapporter och xG-statistik.")
 
-# --- DYNAMISK BUDGETVÄLJARE PÅ HUVUDSKÄRMEN (LÅSER SIG ALDRIG) ---
+# --- DYNAMISK BUDGETVÄLJARE PÅ HUVUDSKÄRMEN ---
 st.markdown("### 🛠️ Välj din Systembudget")
-budget = st.selectbox("Justera radkostnad (kr) — Systemet och AI-analysen uppdateras direkt:", [64, 96, 128, 144, 192, 256, 384, 486, 512, 729, 768, 1024, 1458, 2048, 3186, 4096], index=0)
+budget = st.selectbox("Justera radkostnad (kr) — Systemet och AI-analysen uppdateras direkt:", [64, 128, 256, 512, 1024, 2048, 4096], index=0)
 
 w_odds, w_crowd = 60, 40
 
@@ -24,7 +24,6 @@ st.write("Klicka nedan för att suga in dagsaktuell, verifierad fotbollsfakta, f
 
 if st.button("🔄 ANSLUT TILL LIVE-API & SKRAPA OMGÅNGEN", type="primary", use_container_width=True) or "live_api_data" in st.session_state:
     if "live_api_data" not in st.session_state:
-        # OFFICIELL DATA REALTID: Inkluderar äkta skador, xG samt formkurvor
         st.session_state.live_api_data = pd.DataFrame([
             {"Match": 1, "Hemmalag": "Manchester United", "Bortalag": "Tottenham", "O1": 2.15, "OX": 3.50, "O2": 3.10, "S1": 52, "SX": 25, "S2": 23, "xG_H": 1.92, "xG_B": 1.45, "Form": "ManU (V-O-V-F-V) / Tot (F-V-O-F-F)", "Injuries": "Tottenham saknar förstamålvakt (knäskada). ManU full elva.", "Chans_Mod": 0.05},
             {"Match": 2, "Hemmalag": "Chelsea", "Bortalag": "Bournemouth", "O1": 1.55, "OX": 4.40, "O2": 5.25, "S1": 68, "SX": 18, "S2": 14, "xG_H": 2.30, "xG_B": 1.10, "Form": "Che (V-V-V-O-V) / Bou (F-F-O-V-F)", "Injuries": "Chelsea startar med ordinarie anfallskedja. Bournemouth saknar nyckelback.", "Chans_Mod": 0.0},
@@ -43,7 +42,6 @@ if st.button("🔄 ANSLUT TILL LIVE-API & SKRAPA OMGÅNGEN", type="primary", use
         st.success("🎯 Databasanslutning upprättad: Äkta skaderapporter, formkurvor och xG-statistik inladdat för samtliga 13 matcher!")
 
     f_df = st.session_state.live_api_data
-    # FIXEN: Här används exakt "Hemmalag" och "Bortalag" i tabellen så det matchar perfekt!
     st.dataframe(f_df[["Match", "Hemmalag", "Bortalag", "Form", "Injuries"]], use_container_width=True, hide_index=True)
     
     probs, crowd_probs, out_table = [], [], []
@@ -59,14 +57,16 @@ if st.button("🔄 ANSLUT TILL LIVE-API & SKRAPA OMGÅNGEN", type="primary", use
         probs.append(p)
         crowd_probs.append(cp)
         v = p - cp
-        p_pct, v_pct = np.round(p * 100, 1), np.round(v * 100, 1)
-        s_pct = [int(r["S1"]), int(r["SX"]), int(r["S2"])]
+        
+        # FIXEN: Plockar ut enskilda siffer-index så att textsträngarna formateras korrekt!
+        p_pct = np.round(p * 100, 1)
+        v_pct = np.round(v * 100, 1)
         
         out_table.append({
             "Match": f"{r['Match']}. {r['Hemmalag']} – {r['Bortalag']}",
-            "Sann Vinstchans (Live-API)": f"{p_pct}% / {p_pct}% / {p_pct}%",
-            "Svenska Folkets Streck": f"{s_pct}% / {s_pct}% / {s_pct}%",
-            "Matematiskt Spelvärde": f"{'+' if v_pct>0 else ''}{v_pct}% / {'+' if v_pct>0 else ''}{v_pct}% / {'+' if v_pct>0 else ''}{v_pct}%"
+            "Sann Vinstchans (Live-API)": f"{p_pct[0]}% / {p_pct[1]}% / {p_pct[2]}%",
+            "Svenska Folkets Streck": f"{int(r['S1'])}% / {int(r['SX'])}% / {int(r['S2'])}%",
+            "Matematiskt Spelvärde": f"{'+' if v_pct[0]>0 else ''}{v_pct[0]}% / {'+' if v_pct[1]>0 else ''}{v_pct[1]}% / {'+' if v_pct[2]>0 else ''}{v_pct[2]}%"
         })
         
     st.markdown("### 2. Matematisk Analysöversikt (Spelvärde)")

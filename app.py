@@ -16,7 +16,7 @@ def get_clean_float(val):
 
 with st.sidebar:
     st.header("Modellkonfiguration")
-    budget = st.selectbox("Välj din Systembudget (kr)", [1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 486, 512, 729, 768, 1024, 2048], index=13)
+    budget = st.selectbox("Välj din Systembudget (kr)", [1, 2, 4, 8, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 2048, 4096], index=12)
 
 st.title("⚽ Ajjes Spelmotor & Live AI")
 up = st.file_uploader("Ladda upp veckans Stryktipsomgång (CSV från Numbers)", type=["csv"])
@@ -51,9 +51,9 @@ if up:
             v1, vX, v2 = p-cp, p-cp, p-cp
             out_table.append({
                 "Match": f"{r['Match']}. {r['Hemmalag']} – {r['Bortalag']}",
-                "Ajjes Sannolikhet (1/X/2)": f"{round(p[0]*100)}% / {round(p[1]*100)}% / {round(p[2]*100)}%",
+                "Ajjes Sannolikhet (1/X/2)": f"{round(p*100)}% / {round(p*100)}% / {round(p*100)}%",
                 "Dina Streck (1/X/2)": f"{round(r['S1'])}% / {round(r['SX'])}% / {round(r['S2'])}%",
-                "Matematiskt Spelvärde": f"{'+' if v1[0]>0 else ''}{round(v1[0]*100,1)}% / {'+' if vX[1]>0 else ''}{round(vX[1]*100,1)}% / {'+' if v2[2]>0 else ''}{round(v2[2]*100,1)}%"
+                "Matematiskt Spelvärde": f"{'+' if v1>0 else ''}{round(v1*100,1)}% / {'+' if vX>0 else ''}{round(vX*100,1)}% / {'+' if v2>0 else ''}{round(v2*100,1)}%"
             })
             match_strings.append(f"Match {r['Match']}: {r['Hemmalag']}-{r['Bortalag']} (Odds: {r['O1']}-{r['OX']}-{r['O2']} | Streck: {r['S1']}%-{r['SX']}%-{r['S2']}%)")
             
@@ -65,9 +65,9 @@ if up:
         candidates = []
         for i, (p, cp) in enumerate(zip(probs, crowd_probs)):
             for s in range(3):
-                if s != sel[i][0]:
+                if s != sel[i]:
                     candidates.append((p[s] + max(0, p[s] - cp[s]) * 2.0, i, s))
-        candidates.sort(key=lambda x: x[0], reverse=True)
+        candidates.sort(key=lambda x: x, reverse=True)
         for _, i, s in candidates:
             if s in sel[i]: continue
             current_options = len(sel[i])
@@ -83,12 +83,16 @@ if up:
         c3.metric("Faktisk kostnad", f"{rows} kr")
         
         detail = []
+        system_summary = []
         for i, s in enumerate(sel):
             r_d = f_df.iloc[i]
             signs_text = "".join(SIGNS[x] for x in sorted(s))
             detail.append({"Match": f"{i+1}. {r_d['Hemmalag']} – {r_d['Bortalag']}", "Dina Tecken": signs_text, "Typ": "Spik" if len(s)==1 else ("Halvgardering" if len(s)==2 else "Helgardering")})
+            system_summary.append(f"M{i+1}: {signs_text}")
+            
         st.dataframe(pd.DataFrame(detail), use_container_width=True, hide_index=True)
         
+        # --- 4. INTEGRERAD LIVE AI-CHATT MED FULLSTÄNDIGT MINNE ---
         st.markdown("### 💬 Fråga Ajjes AI om Live-Fakta & Skador")
         if "messages" not in st.session_state: st.session_state.messages = []
         for msg in st.session_state.messages:
@@ -98,15 +102,13 @@ if up:
             with st.chat_message("user"): st.write(q)
             st.session_state.messages.append({"role": "user", "content": q})
             
-            # Formaterar den kompletta instruktionen till huvudchatten
-            system_summary = ", ".join([f"M{i+1}: {d['Dina Tecken']}" for i, d in enumerate(detail)])
-            full_context = f"Analysera enligt Ajjes Stryktipsmodell. Matcher:\n" + "\n".join(match_strings) + f"\nSystemet har genererat raden: {system_summary}. Budget: {budget} kr. Svara på frågan utifrån dagsaktuell, verklig fotbollsfakta, formkurvor, xG och skador för denna omgång: {q}"
+            full_prompt = f"Analysera enligt Ajjes Stryktipsmodell. Systemrad: {', '.join(system_summary)}. Budget: {budget} kr. Utgå från dagsaktuell, verklig fotbollsfakta, formkurvor, xG och skador för denna omgång och besvara: {q}"
             
             with st.chat_message("assistant"):
                 st.write("⚠️ **AI-Analys aktiverad!** Kopiera texten i rutan nedanför och klistra in den direkt till mig här i vår stora chatt, så skannar jag av sportdatabaserna live efter skador, avstängningar, xG och formkurvor för just den här spelomgången!")
-                st.text_area("Kopiera den här texten och klistra in till mig i chatten:", full_context, height=150)
+                st.text_area("Kopiera den här texten och klistra in till mig i chatten:", full_prompt, height=120)
             st.session_state.messages.append({"role": "assistant", "content": "Klistra in texten här i chatten så kör vi djupanalysen live!"})
     except Exception as e:
         st.error(f"Ett fel uppstod vid beräkning: {e}")
 else:
-    st.info("👋 Välkommen Ajje! Ladda upp din exporterade CSV-fil från Numbers här ovanför.")
+    st.info("👋 Välkommen Ajje! Ladda upp din exporterade CSV-fil från Numbers ovanför.")

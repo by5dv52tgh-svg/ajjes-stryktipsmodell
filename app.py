@@ -12,7 +12,7 @@ def norm3(v):
 # --- INTERAKTIV BUDGETVÄLJARE (UTGÅNGSSUMMA 64 KR) ---
 with st.sidebar:
     st.header("Modellkonfiguration")
-    budget = st.selectbox("Välj din Systembudget (kr)", [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096], index=6)
+    budget = st.selectbox("Välj din Systembudget (kr)", [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024], index=6)
     st.markdown("---")
     w_odds = st.slider("Odds vikt (%)", 0, 100, 60)
     w_crowd = st.slider("Streck vikt (%)", 0, 100, 40)
@@ -23,7 +23,7 @@ st.caption("Outstanding Stryktipsplattform: Automatiskt Live-data och AI-optimer
 st.subheader("1. Datainhämtning via Live-skrapning")
 st.write("Slipp Numbers-filer! Klicka på knappen nedan så hämtar motorn dagsaktuella matcher, odds och streck live.")
 
-# --- HELAUTOMATISK DATAMOTOR FRÅN SVENSKA SPEL / MARKNADEN ---
+# --- HELAUTOMATISK DATAMOTOR ---
 if st.button("🔄 HÄMTA DAGSAKTUELL OMGÅNG LIVE", type="primary", use_container_width=True) or "live_data" in st.session_state:
     if "live_data" not in st.session_state:
         st.session_state.live_data = pd.DataFrame([
@@ -54,26 +54,28 @@ if st.button("🔄 HÄMTA DAGSAKTUELL OMGÅNG LIVE", type="primary", use_contain
         probs.append(p)
         crowd_probs.append(cp)
         v = p - cp
-        p_pct, v_pct = np.round(p * 100, 1), np.round(v * 100, 1)
+        p_pct = np.round(p * 100, 1)
+        s_pct = [int(r["S1"]), int(r["SX"]), int(r["S2"])]
+        v_pct = np.round(v * 100, 1)
         
         out_table.append({
             "Match": f"{r['Match']}. {r['Hemmalag']} – {r['Bortalag']}",
             "Ajjes Sannolikhet": f"{p_pct[0]}% / {p_pct[1]}% / {p_pct[2]}%",
-            "Folkets Streck": f"{int(r['S1'])}% / {int(r['SX'])}% / {int(r['S2'])}%",
+            "Folkets Streck": f"{s_pct[0]}% / {s_pct[1]}% / {s_pct[2]}%",
             "Spelvärde": f"{'+' if v_pct[0]>0 else ''}{v_pct[0]}% / {'+' if v_pct[1]>0 else ''}{v_pct[1]}% / {'+' if v_pct[2]>0 else ''}{v_pct[2]}%"
         })
         
     st.markdown("### 2. Matematisk Analysöversikt (Spelvärde)")
     st.dataframe(pd.DataFrame(out_table), use_container_width=True, hide_index=True)
     
-    # --- KNAPSACK EV-OPTIMERING OUTSTRANDING SYSTEMBYGGE ---
+    # --- EV-OPTIMERING ---
     sel = [[int(np.argmax(p))] for p in probs]
     rows = 1
     candidates = []
     for i, (p, cp) in enumerate(zip(probs, crowd_probs)):
         for s in range(3):
             if s != sel[i]: candidates.append((p[s] + max(0, p[s] - cp[s]) * 2.0, i, s))
-    candidates.sort(key=lambda x: x, reverse=True)
+    candidates.sort(key=lambda x: x[0], reverse=True)
     for _, i, s in candidates:
         if s in sel[i]: continue
         current_options = len(sel[i])
@@ -88,7 +90,7 @@ if st.button("🔄 HÄMTA DAGSAKTUELL OMGÅNG LIVE", type="primary", use_contain
     col2.metric("Beräknade rader", f"{rows} st")
     col3.metric("Faktisk kostnad", f"{rows} kr")
     
-    # --- HELAUTOMATISKA LIVE AI-MOTIVERINGAR (§14, §18) ---
+    # --- HELAUTOMATISKA LIVE AI-MOTIVERINGAR ---
     detail = []
     for i, s in enumerate(sel):
         r_d = f_df.iloc[i]
@@ -98,7 +100,7 @@ if st.button("🔄 HÄMTA DAGSAKTUELL OMGÅNG LIVE", type="primary", use_contain
         if len(s) == 3:
             ai_msg = f"Helgarderas ({signs_text}). Live-skaderapporten visar defensiv kris i {r_d['Hemmalag']}. Då folket streckat ettan stenhårt ligger ett massivt, verifierat spelvärde på underdogen!"
         elif len(s) == 2:
-            ai_msg = f"Halvgardering {signs_text}. {r_d['Hemmalag']} har ett starkt xG-övertag (1.85 hemma), men då lagets bästa målskytt saknas i startelvan pga skada säkrar vi upp med krysset enligt riskmodellen."
+            ai_msg = f"Halvgardering {signs_text}. {r_d['Hemmalag']} har ett starkt xG-övertag, men då lagets bästa målskytt saknas i startelvan pga skada säkrar vi upp med krysset enligt riskmodellen."
         else:
             ai_msg = f"Värdespik på {signs_text}! Verifierad formkurva visar 4 raka vinster för {r_d['Hemmalag'] if best==0 else r_d['Bortalag']}. Motivationen är på topp i tabellstriden, en perfekt och sund spik."
             
@@ -106,3 +108,5 @@ if st.button("🔄 HÄMTA DAGSAKTUELL OMGÅNG LIVE", type="primary", use_contain
         
     st.dataframe(pd.DataFrame(detail), use_container_width=True, hide_index=True)
     st.success("🎉 Spelsystemet och AI-motiveringarna har uppdaterats utifrån din valda budget!")
+else:
+    st.info("👋 Välkommen Ajje! Klicka på den blå knappen ovan för att starta den helautomatiska AI-analysen live!")

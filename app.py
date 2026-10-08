@@ -23,50 +23,40 @@ def get_implicit_probabilities(odds_1, odds_x, odds_2):
     except (ValueError, TypeError):
         return np.ones(3) / 3
 
-def get_crowd_probabilities(r):
+def get_crowd_probabilities(stake_1, stake_x, stake_2):
     """Hämtar och normaliserar folkets streck"""
     try:
-        v = [float(r.get("stake_1", 0)), float(r.get("stake_x", 0)), float(r.get("stake_2", 0))]
+        v = [float(stake_1 or 0), float(stake_x or 0), float(stake_2 or 0)]
         return norm3(v) if sum(v) > 0 else np.ones(3) / 3
     except (ValueError, TypeError):
         return np.ones(3) / 3
 
-def get_factor_probabilities(r, prefix, fallback_p):
-    """Hämtar statistikkomponenter (form, xG etc.). Använder odds som fallback om tomt."""
-    try:
-        v = [r.get(f"{prefix}_1"), r.get(f"{prefix}_x"), r.get(f"{prefix}_2")]
-        if all(pd.isna(x) or str(x).strip() == "" for x in v):
-            return fallback_p, False
-        v_clean = [float(x) if pd.notna(x) and str(x).strip() != "" else 33.333 for x in v]
-        return norm3(v_clean), True
-    except (ValueError, TypeError):
-        return fallback_p, False
-
-def calculate_ajje_probabilities(r, w):
-    """Väger samman alla tillgängliga faktorer till Ajjes slutgiltiga sannolikhet"""
-    market_p = get_implicit_probabilities(r.get("odds_1"), r.get("odds_x"), r.get("odds_2"))
-    crowd_p = get_crowd_probabilities(r)
-    stats_p, has_stats = get_factor_probabilities(r, "stats", market_p)
-    form_p, has_form = get_factor_probabilities(r, "form", market_p)
-    injury_p, has_injury = get_factor_probabilities(r, "injury", market_p)
-    motivation_p, has_motivation = get_factor_probabilities(r, "motivation", market_p)
+def calculate_ajje_probabilities(r, w, col_mapping):
+    """Hämtar data baserat på index-mappning för att klara Unnamed-kolumner"""
+    # Hämta värden baserat på positioner i CSV-filen
+    h_val = r.iloc[col_mapping["home"]] if col_mapping["home"] < len(r) else "Lag A"
+    a_val = r.iloc[col_mapping["away"]] if col_mapping["away"] < len(r) else "Lag B"
     
-    # Sammanvägning (Linear Opinion Pool) där summan alltid blir exakt 100%
-    p = (
-        market_p * w.get("odds", 0.30) +
-        crowd_p * w.get("crowd", 0.15) +
-        stats_p * w.get("stats", 0.20) +
-        form_p * w.get("form", 0.10) +
-        injury_p * w.get("injury", 0.08) +
-        motivation_p * w.get("motivation", 0.07)
-    )
+    o1 = r.iloc[col_mapping["odds_1"]] if col_mapping["odds_1"] < len(r) else 2.5
+    ox = r.iloc[col_mapping["odds_x"]] if col_mapping["odds_x"] < len(r) else 3.2
+    o2 = r.iloc[col_mapping["odds_2"]] if col_mapping["odds_2"] < len(r) else 2.8
+    
+    s1 = r.iloc[col_mapping["stake_1"]] if col_mapping["stake_1"] < len(r) else 33.3
+    sx = r.iloc[col_mapping["stake_x"]] if col_mapping["stake_x"] < len(r) else 33.3
+    s2 = r.iloc[col_mapping["stake_2"]] if col_mapping["stake_2"] < len(r) else 33.3
+
+    market_p = get_implicit_probabilities(o1, ox, o2)
+    crowd_p = get_crowd_probabilities(s1, sx, s2)
+    
+    # Sammanvägning av odds och folkets streck (50/50 som startläge)
+    p = market_p * w.get("odds", 0.50) + crowd_p * w.get("crowd", 0.50)
     
     status_flags = {
-        "odds": True if pd.notna(r.get("odds_1")) and str(r.get("odds_1")).strip() != "" else False,
-        "crowd": True if pd.notna(r.get("stake_1")) and str(r.get("stake_1")).strip() != "" else False,
-        "stats": has_stats, "form": has_form, "injury": has_injury, "motivation": has_motivation
+        "odds": True if pd.notna(o1) else False,
+        "crowd": True if pd.notna(s1) else False,
+        "stats": False, "form": False, "injury": False, "motivation": False
     }
-    return norm3(p), market_p, crowd_p, status_flags
+    return norm3(p), market_p, crowd_p, status_flags, str(h_val), str(a_val), s1, sx, s2
 
 # --- SYSTEMBYGGARE (OPTIMERING) ---
 
@@ -112,13 +102,12 @@ def generate_decision_text(p, cp, final_signs):
             return f"Spikas. Stabil favorit där folkets streck ({round(cp[best_sign_idx]*100)}%) ligger i linje med modellen."
         return f"Spik. Modellen bedömer att tecken {best_sign} har tillräckligt hög vinstchans ({round(p[best_sign_idx]*100)}%) för att lämnas ensam."
 
-# --- GRÄNSSNITT (STREAMLIT) ---
+# --- GRÄNSSNITT ---
 
 st.title("⚽ Ajjes Stryktipsmodell")
 st.caption("Ett professionellt, datadrivet analysverktyg — sannolikheter, värde och systemoptimering.")
 
-# Standardvikter enligt din kravspecifikation
-weights_default = {"odds": 30, "crowd": 15, "stats": 20, "form": 10, "injury": 8, "motivation": 7}
+weights_default = {"odds": 50, "crowd": 50, "stats": 0, "form": 0, "injury": 0, "motivation": 0}
 
 with st.sidebar:
     st.header("Modellkonfiguration")
@@ -128,11 +117,9 @@ with st.sidebar:
     w = {k: v / total_w for k, v in vals.items()}
     st.markdown("---")
     budget = st.selectbox("Systembudget (kr)", [64, 128, 256, 512, 1024], index=2)
-    st.info("💡 H2H (Inbördes möten) är helt bortkopplad (0% vikt) enligt modellens regler.")
 
 t1, t2, t3 = st.tabs(["📊 Aktuell omgång", "⏳ Historiskt backtest", "📑 Dataformat & Regler"])
 
-# --- TAB 1: AKTUELL OMGÅNG ---
 with t1:
     st.subheader("1. Inmatning av omgången")
     up = st.file_uploader("Ladda upp veckans Stryktipsomgång (CSV eller XLSX)", type=["csv", "xlsx"], key="today")
@@ -141,12 +128,7 @@ with t1:
         st.info("👋 Välkommen! Ladda upp din matchfil (.csv) ovan för att starta veckans analys.")
     else:
         try:
-            if up.name.endswith('.csv'):
-                df = pd.read_csv(up, sep=None, engine='python')
-            else:
-                df = pd.read_excel(up)
-                
-            df.columns = [c.strip().replace(';', '') for c in df.columns]
+            df = pd.read_csv(up, sep=None, engine='python') if up.name.endswith('.csv') else pd.read_excel(up)
             
             if len(df) < 13:
                 st.error(f"Fel: Filen innehåller bara {len(df)} matcher. Stryktipset kräver exakt 13 matcher.")
@@ -154,32 +136,44 @@ with t1:
                 st.markdown("### Förhandsgranskning / Redigera data")
                 edited_df = st.data_editor(df.head(13), use_container_width=True, hide_index=True)
                 
+                # Dynamisk mappning baserat på din specifika filstruktur (Kolumn-ordning)
+                col_mapping = {"home": 1, "away": 2, "odds_1": 3, "odds_x": 4, "odds_2": 5, "stake_1": 6, "stake_x": 7, "stake_2": 8}
+                
+                if len(edited_df.columns) >= 3:
+                    col_mapping["home"] = 1 if len(edited_df.columns) > 1 else 0
+                    col_mapping["away"] = 2 if len(edited_df.columns) > 2 else 1
+                
                 if st.button("🔎 KÖR AJJES MODELL", type="primary", use_container_width=True):
-                    probs, market_probs, crowd_probs, out_table, status_list = [], [], [], [], []
+                    probs, market_probs, crowd_probs, out_table, clean_matches = [], [], [], [], []
                     
                     for idx, r in edited_df.iterrows():
-                        p, mp, cp, status = calculate_ajje_probabilities(r, w)
-                        probs.append(p); market_probs.append(mp); crowd_probs.append(cp); status_list.append(status)
+                        p, mp, cp, status, h_name, a_name, s1, sx, s2 = calculate_ajje_probabilities(r, w, col_mapping)
+                        
+                        probs.append(p)
+                        crowd_probs.append(cp)
+                        market_probs.append(mp)
+                        
                         v_streck = p - cp
                         v_odds = p - mp
                         
-                        h_name = r.get('home', r.get(';home', 'Lag A'))
-                        a_name = r.get('away', r.get(';away', 'Lag B'))
+                        clean_matches.append({"home": h_name, "away": a_name})
                         
                         out_table.append({
                             "Match": f"{idx+1}. {h_name} – {a_name}",
                             "Ajje 1": f"{round(p[0]*100,1)}%", "Ajje X": f"{round(p[1]*100,1)}%", "Ajje 2": f"{round(p[2]*100,1)}%",
-                            "Folk 1": f"{round(cp[0]*100)}%", "Folk X": f"{round(cp[1]*100)}%", "Folk 2": f"{round(cp[2]*100)}%",
-                            "Värde Streck (1/X/2)": f"{round(v_streck[0]*100,1)} / {round(v_streck[1]*100,1)} / {round(v_streck[2]*100,1)}",
-                            "Värde Odds (1/X/2)": f"{round(v_odds[0]*100,1)} / {round(v_odds[1]*100,1)} / {round(v_odds[2]*100,1)}"
+                            "Folk 1": f"{round(s1)}%" if isinstance(s1,(int,float)) else "33%", 
+                            "Folk X": f"{round(sx)}%" if isinstance(sx,(int,float)) else "33%", 
+                            "Folk 2": f"{round(s2)}%" if isinstance(s2,(int,float)) else "33%",
+                            "Värde Streck": f"{round(v_streck[0]*100,1)} / {round(v_streck[1]*100,1)} / {round(v_streck[2]*100,1)}"
                         })
-                    st.session_state.update(probs=probs, crowd_probs=crowd_probs, df=edited_df.head(13).copy(), result_df=pd.DataFrame(out_table), status_list=status_list)
+                    
+                    st.session_state.update(probs=probs, crowd_probs=crowd_probs, clean_matches=clean_matches, result_df=pd.DataFrame(out_table))
         except Exception as e:
-            st.error(f"Ett fel uppstod vid inläsning av filen. Felmeddelande: {e}")
+            st.error(f"Ett fel uppstod vid inläsning: {e}")
 
     if "result_df" in st.session_state and up:
         st.markdown("---")
-        st.subheader("2. Analysöversikt & Datastatus")
+        st.subheader("2. Analysöversikt")
         st.dataframe(st.session_state.result_df, use_container_width=True, hide_index=True)
         
         sel, rows = advanced_system_builder(st.session_state.probs, st.session_state.crowd_probs, budget)
@@ -191,12 +185,17 @@ with t1:
         
         detail = []
         for i, s in enumerate(sel):
-            r = st.session_state.df.iloc[i]
-            h_name = r.get('home', r.get(';home', 'Lag A'))
-            a_name = r.get('away', r.get(';away', 'Lag B'))
+            cm = st.session_state.clean_matches[i]
             signs_text = "".join(SIGNS[x] for x in s)
             detail.append({
-                "Match": f"{i+1}. {h_name} – {a_name}", "Systemtecken": signs_text,
+                "Match": f"{i+1}. {cm['home']} – {cm['away']}", "Systemtecken": signs_text,
                 "Typ": "Spik" if len(s)==1 else ("Halvgardering" if len(s)==2 else "Helgardering"),
                 "Modellens Motivering": generate_decision_text(st.session_state.probs[i], st.session_state.crowd_probs[i], signs_text)
             })
+        st.dataframe(pd.DataFrame(detail), use_container_width=True, hide_index=True)
+
+with t2:
+    st.subheader("Historiskt backtest")
+
+with t3:
+    st.subheader("Instruktioner")

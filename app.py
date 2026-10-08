@@ -140,14 +140,12 @@ with t1:
     if not up:
         st.info("👋 Välkommen! Ladda upp din matchfil (.csv) ovan för att starta veckans analys.")
     else:
-        # FIXEN: sep=None och engine='python' gör att Pandas automatiskt kan läsa filer med semikolon (;)
         try:
             if up.name.endswith('.csv'):
                 df = pd.read_csv(up, sep=None, engine='python')
             else:
                 df = pd.read_excel(up)
                 
-            # Om filen har ett tomt index eller konstiga semikolontecken i kolumnnamnen, städa upp dem
             df.columns = [c.strip().replace(';', '') for c in df.columns]
             
             if len(df) < 13:
@@ -165,7 +163,6 @@ with t1:
                         v_streck = p - cp
                         v_odds = p - mp
                         
-                        # Försök hämta lagnamn, hantera om kolumnen råkar ha ett semikolon i sig
                         h_name = r.get('home', r.get(';home', 'Lag A'))
                         a_name = r.get('away', r.get(';away', 'Lag B'))
                         
@@ -178,7 +175,7 @@ with t1:
                         })
                     st.session_state.update(probs=probs, crowd_probs=crowd_probs, df=edited_df.head(13).copy(), result_df=pd.DataFrame(out_table), status_list=status_list)
         except Exception as e:
-            st.error(f"Ett fel uppstod vid inläsning av filen. Säkerställ att kolumnnamnen är korrekta. Felmeddelande: {e}")
+            st.error(f"Ett fel uppstod vid inläsning av filen. Felmeddelande: {e}")
 
     if "result_df" in st.session_state and up:
         st.markdown("---")
@@ -199,3 +196,7 @@ with t1:
             a_name = r.get('away', r.get(';away', 'Lag B'))
             signs_text = "".join(SIGNS[x] for x in s)
             detail.append({
+                "Match": f"{i+1}. {h_name} – {a_name}", "Systemtecken": signs_text,
+                "Typ": "Spik" if len(s)==1 else ("Halvgardering" if len(s)==2 else "Helgardering"),
+                "Modellens Motivering": generate_decision_text(st.session_state.probs[i], st.session_state.crowd_probs[i], signs_text)
+            })

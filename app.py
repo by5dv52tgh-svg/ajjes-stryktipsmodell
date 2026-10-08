@@ -13,10 +13,10 @@ def parse_file(file):
         for i, r in enumerate(df.itertuples(index=False)):
             vals = [x for x in list(r) if pd.notna(x) and str(x).strip() != ""]
             if len(vals) < 3 or "home" in str(vals).lower() or "match" in str(vals).lower(): continue
-            h, a = str(vals).strip(), str(vals).strip()
+            h, a = str(vals[1]).strip(), str(vals[2]).strip()
             num = [float(str(x).replace("%","").strip()) for x in vals if str(x).replace("%","").strip().replace(".","",1).isdigit()]
-            s = num[1:4] if (num and int(num) == i+1) else num[:3]
-            s1, sx, s2 = (s if len(s)>0 else 33), (s if len(s)>1 else 33), (s if len(s)>2 else 33)
+            s = num[1:4] if (num and int(num[0]) == i+1) else num[:3]
+            s1, sx, s2 = (s[0] if len(s)>0 else 33), (s[1] if len(s)>1 else 33), (s[2] if len(s)>2 else 33)
             tot = s1 + sx + s2 if (s1 + sx + s2) > 0 else 100
             o1, ox, o2 = round(1 / max((s1/tot)*0.9, 0.05), 2), round(1 / max((sx/tot)*0.9, 0.05), 2), round(1 / max((s2/tot)*0.9, 0.05), 2)
             res.append({"Match": i+1, "Hemmalag": h, "Bortalag": a, "Odds 1": o1, "Odds X": ox, "Odds 2": o2, "Streck 1": int(s1), "Streck X": int(sx), "Streck 2": int(s2)})
@@ -38,7 +38,7 @@ def build_sys(probs, cp, budget):
     return [sorted(x) for x in sel], rows
 
 st.title("⚽ Ajjes Stryktipsmodell")
-budget = st.sidebar.selectbox("Systembudget (kr)",, index=2)
+budget = st.sidebar.selectbox("Systembudget (kr)", [16, 64, 256, 1024, 4096], index=2)
 up = st.file_uploader("Ladda upp CSV från Numbers", type=["csv"])
 
 if up:
@@ -53,17 +53,11 @@ if up:
             p = norm3(mp * 0.5 + c * 0.5)
             probs.append(p); cp.append(c)
             v = p - c
-            out.append({"Match": f"{idx+1}. {r['Hemmalag']} - {r['Bortalag']}", "Ajje 1": f"{round(p*100,1)}%", "Ajje X": f"{round(p*100,1)}%", "Ajje 2": f"{round(p*100,1)}%", "Folk 1": f"{r['Streck 1']}%", "Folk X": f"{r['Streck X']}%", "Folk 2": f"{r['Streck 2']}%", "Spelvärde (1/X/2)": f"{round(v*100,1)}% / {round(v*100,1)}% / {round(v*100,1)}%"})
-        
+            out.append({"Match": f"{idx+1}. {r['Hemmalag']} - {r['Bortalag']}", "Ajje 1": f"{round(p[0]*100,1)}%", "Ajje X": f"{round(p[1]*100,1)}%", "Ajje 2": f"{round(p[2]*100,1)}%", "Folk 1": f"{r['Streck 1']}%", "Folk X": f"{r['Streck X']}%", "Folk 2": f"{r['Streck 2']}%", "Spelvärde": f"{round(v[0]*100,1)}% / {round(v[1]*100,1)}% / {round(v[2]*100,1)}%"})
         st.subheader("2. Analysöversikt")
         st.dataframe(pd.DataFrame(out), use_container_width=True, hide_index=True)
         sel, rows = build_sys(probs, cp, budget)
         st.subheader("3. Optimerat Systembygge")
         st.info(f"**Rader:** {rows} st  |  **Kostnad:** {rows} kr  |  **Rad:** {' – '.join(''.join(SIGNS[s] for s in x) for x in sel)}")
-        
-        detail = []
-        for i, s in enumerate(sel):
-            signs_text = "".join(SIGNS[x] for x in s)
-            t = "Spik" if len(s)==1 else ("Halvgardering" if len(s)==2 else "Helgardering")
-            detail.append({"Match": f"{i+1}. {df.iloc[i]['Hemmalag']} - {df.iloc[i]['Bortalag']}", "Tecken": signs_text, "Typ": t})
+        detail = [{"Match": f"{i+1}. {df.iloc[i]['Hemmalag']} - {df.iloc[i]['Bortalag']}", "Tecken": "".join(SIGNS[x] for x in s)} for i, s in enumerate(sel)]
         st.dataframe(pd.DataFrame(detail), use_container_width=True, hide_index=True)

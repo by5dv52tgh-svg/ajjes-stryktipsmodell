@@ -139,9 +139,9 @@ def generate_decision_text(match_name, p, cp, mp, final_signs):
     over_streckad = (cp[crowd_fav_idx] - p[crowd_fav_idx]) > 0.10
     
     if len(final_signs) == 3:
-        return f"Helgarderas. Matchen är mycket oviss eller så innehåller underdog-tecknen ett extremt spelvärde som måste täckas."
+        return "Helgarderas. Matchen är mycket oviss eller så innehåller underdog-tecknen ett extremt spelvärde som måste täckas."
     elif len(final_signs) == 2:
-        undervalued = [SIGNS[i] for i in range(3) if (p[i] - cp[i]) > 0.02 and i in [SIGNS.index(c) for c in final_signs]]
+        undervalued = [SIGNS[i] for i in range(3) if (p[i] - cp[i]) > 0.02 and SIGNS[i] in final_signs]
         if over_streckad and SIGNS[crowd_fav_idx] not in final_signs:
             return f"Garderade bort folkets favorit ({SIGNS[crowd_fav_idx]}) eftersom den är kraftigt överstreckad. Värdet ligger på {final_signs}."
         return f"Halvgardering {final_signs}. Modellen identifierar fint spelvärde i tecken {undervalued} jämfört med folkets streck."
@@ -155,7 +155,7 @@ def generate_decision_text(match_name, p, cp, mp, final_signs):
 st.title("⚽ Ajjes Stryktipsmodell")
 st.caption("Ett professionellt, datadrivet analysverktyg — sannolikheter, värde, systemoptimering och strikt backtesting.")
 
-# Standardvikter enligt din specifikation (kan ändras dynamiskt i sidebar)
+# Standardvikter enligt din specifikation
 weights_default = {
     "odds": 30,
     "crowd": 15,
@@ -234,3 +234,4 @@ with t1:
                     match_name = f"{r.get('home','Lag A')} – {r.get('away','Lag B')}"
                     
                     out_table.append({
+                        "Match": f"{idx+1}. {match_name}",
